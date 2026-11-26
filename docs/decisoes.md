@@ -87,3 +87,66 @@ Formato de cada decisão: **Contexto → Alternativas → Decisão → Por quê 
 - **Decisão:** interface + implementação.
 - **Por quê:** a interface descreve **o que** o service oferece (o "contrato"), e a `Impl` descreve **como** faz. O controller depende só do contrato, o que deixa claro o que é público e facilita trocar a implementação (ex.: um pagamento simulado por um real, na Etapa 5).
 - **Consequências:** um arquivo a mais por service. Muitos projetos modernos usam só a classe concreta quando existe uma única implementação; aqui escolhemos a interface pela clareza e pelo aprendizado do conceito.
+
+---
+
+# Etapa 2: autenticação e papéis
+
+## D10. Autenticação com JWT: access token curto + refresh token longo
+
+- **Contexto:** a API precisa saber quem está fazendo cada requisição e se essa pessoa é ADMIN ou USER.
+- **Alternativas:**
+  1. Sessão no servidor com cookie (o modelo clássico de sites).
+  2. Um único JWT de longa duração.
+  3. Access token JWT curto (15 min) + refresh token longo (7 dias).
+- **Decisão:** opção 3.
+- **Por quê:** o JWT é **autocontido**: o servidor confere a assinatura e já sabe o id e o papel do usuário, sem consultar o banco a cada requisição, e sem guardar sessão (API *stateless*). O ponto fraco do JWT é que ele não pode ser "desligado" antes de expirar. Por isso ele dura pouco (15 min). Para o usuário não precisar logar a cada 15 minutos, existe o refresh token, que fica no banco e **pode** ser revogado.
+- **Consequências:** depois do logout, o access token ainda vale até expirar (no máximo 15 min). É a troca aceita em troca de não consultar o banco em toda requisição. O cliente precisa lidar com o 401 e chamar `/api/auth/refresh`.
+
+## D11. Biblioteca JJWT + filtro próprio, em vez do "resource server" do Spring
+
+- **Contexto:** precisamos gerar e validar JWT dentro do Spring Security.
+- **Alternativas:** `spring-boot-starter-oauth2-resource-server` (o Spring valida o token quase sozinho, com configuração); a biblioteca JJWT com um filtro escrito por nós.
+- **Decisão:** JJWT + `JwtAuthenticationFilter` (um `OncePerRequestFilter`).
+- **Por quê:** o objetivo do projeto é aprender. Com o filtro próprio, cada passo fica visível: ler o header, validar o token, registrar o usuário no `SecurityContext`. O resource server é ótimo, mas esconde esses passos.
+- **Consequências:** mais código nosso para manter. Migrar para o resource server no futuro é possível sem mudar os controllers, porque eles só recebem o `AuthenticatedUser`.
+
+## D12. Refresh token aleatório, salvo como hash, com rotação e detecção de reuso
+
+- **Contexto:** o refresh token vale 7 dias; se vazar, é perigoso.
+- **Alternativas:** refresh token também em JWT; token aleatório guardado em texto puro; token aleatório guardado como hash.
+- **Decisão:** 32 bytes aleatórios (`SecureRandom`), guardando no banco só o SHA-256. A cada uso, o token antigo é revogado e um novo é emitido (**rotação**). Se um token já revogado for usado de novo, **todas** as sessões do usuário são revogadas.
+- **Por quê:** não precisa ser JWT, porque sempre consultamos o banco para ele. Guardar o hash faz com que um vazamento do banco não entregue tokens usáveis (mesma ideia das senhas). A rotação com detecção de reuso pega o caso "alguém copiou meu token": quando o dono legítimo e o atacante usam o mesmo token, o segundo uso derruba tudo.
+- **Consequências:** a tabela `refresh_tokens` cresce; no futuro vale uma limpeza periódica de tokens expirados.
+
+## D13. Senhas com BCrypt
+
+- **Contexto:** nunca se guarda senha em texto puro.
+- **Alternativas:** SHA-256 (rápido), BCrypt, Argon2.
+- **Decisão:** BCrypt (`BCryptPasswordEncoder`).
+- **Por quê:** hashes rápidos como SHA-256 permitem testar bilhões de senhas por segundo. BCrypt é **propositalmente lento** e usa um "sal" aleatório por senha, então duas senhas iguais geram hashes diferentes. Argon2 é ainda mais moderno, mas BCrypt é o padrão do Spring e mais que suficiente aqui.
+- **Consequências:** BCrypt só usa os primeiros 72 bytes da senha; por isso limitamos a senha a 72 caracteres na validação.
+
+## D14. DTOs (records) na entrada e na saída da API
+
+- **Contexto:** o que a API recebe e devolve.
+- **Alternativas:** usar as entidades JPA direto nos controllers; criar DTOs.
+- **Decisão:** DTOs como `record` (`RegisterRequest`, `TokenResponse`, `UserResponse`...).
+- **Por quê:** devolver a entidade `User` exporia o hash da senha. Receber a entidade permitiria que alguém mandasse `"role": "ADMIN"` no cadastro. O DTO define exatamente o que entra e o que sai, e carrega as validações (`@NotBlank`, `@Email`).
+- **Consequências:** um pouco mais de código (conversões como `UserResponse.from(user)`), mas a API fica desacoplada do banco.
+
+## D15. Admin inicial via configuração, cadastro público sempre USER
+
+- **Contexto:** a especificação pede um admin inicial e que só admins promovam outros usuários.
+- **Alternativas:** inserir o admin numa migração SQL; criar via código ao subir, lendo e-mail e senha da configuração.
+- **Decisão:** `AdminSeeder` (um `ApplicationRunner`) cria o admin se ele não existir, com dados de `ADMIN_EMAIL` / `ADMIN_PASSWORD` (com padrão só para desenvolvimento). O `/api/auth/register` sempre cria USER. Um admin não pode tirar o próprio papel de ADMIN.
+- **Por quê:** a senha precisa passar pelo BCrypt (difícil de fazer numa migração SQL) e não deve ficar fixa no código versionado. A trava de "auto-rebaixamento" evita que o último admin se tranque fora do sistema.
+- **Consequências:** em produção é obrigatório definir `ADMIN_PASSWORD` e `JWT_SECRET`.
+
+## D16. Erros padronizados com hierarquia de exceções
+
+- **Contexto:** cada erro precisa virar um status HTTP correto com uma mensagem clara.
+- **Alternativas:** tratar erros com `try/catch` em cada controller; lançar `RuntimeException` genérica; ter exceções próprias por tipo de erro.
+- **Decisão:** `ApiException` com subclasses (`NotFoundException` → 404, `ConflictException` → 409, `UnauthorizedException` → 401, `BusinessException` → 400) e um `@RestControllerAdvice` que transforma todas no mesmo JSON (`ApiError`). Erros inesperados viram 500 sem detalhes internos.
+- **Por quê:** o service só diz *o que* deu errado (`throw new ConflictException("E-mail já cadastrado")`); o formato da resposta fica num lugar só.
+- **Consequências:** erros de segurança (401/403) acontecem nos filtros, antes dos controllers, então precisaram de um escritor próprio (`SecurityErrorWriter`) no mesmo formato.
