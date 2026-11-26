@@ -1,4 +1,6 @@
-package com.reservacinema.showtime;
+package com.reservacinema.showtime.repository;
+
+import com.reservacinema.showtime.entity.Showtime;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

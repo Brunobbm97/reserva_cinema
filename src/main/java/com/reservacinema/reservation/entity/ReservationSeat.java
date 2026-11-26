@@ -1,7 +1,7 @@
-package com.reservacinema.reservation;
+package com.reservacinema.reservation.entity;
 
-import com.reservacinema.room.Seat;
-import com.reservacinema.showtime.Showtime;
+import com.reservacinema.room.entity.Seat;
+import com.reservacinema.showtime.entity.Showtime;
 import jakarta.persistence.*;
 
 /**

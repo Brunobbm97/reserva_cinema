@@ -1,4 +1,6 @@
-package com.reservacinema.movie;
+package com.reservacinema.movie.repository;
+
+import com.reservacinema.movie.entity.Genre;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

@@ -1,4 +1,6 @@
-package com.reservacinema.user;
+package com.reservacinema.user.repository;
+
+import com.reservacinema.user.entity.User;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

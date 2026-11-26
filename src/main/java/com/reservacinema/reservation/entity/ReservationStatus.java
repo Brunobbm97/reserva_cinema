@@ -1,4 +1,4 @@
-package com.reservacinema.reservation;
+package com.reservacinema.reservation.entity;
 
 /**
  * Ciclo de vida de uma reserva:

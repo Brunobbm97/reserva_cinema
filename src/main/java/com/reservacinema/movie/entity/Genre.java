@@ -1,4 +1,4 @@
-package com.reservacinema.movie;
+package com.reservacinema.movie.entity;
 
 import jakarta.persistence.*;
 

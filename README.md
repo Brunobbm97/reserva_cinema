@@ -37,6 +37,24 @@ Pré-requisitos: Java 21, Maven e PostgreSQL.
 
 Para usar outro banco, defina as variáveis `DB_URL`, `DB_USER` e `DB_PASSWORD`.
 
+## Organização das pastas
+
+```
+src/main/java/com/reservacinema/
+├── user/
+│   ├── entity/        User, Role
+│   └── repository/    UserRepository
+├── movie/
+│   ├── entity/        Movie, Genre
+│   └── repository/    MovieRepository, GenreRepository
+├── room/              (mesma estrutura: entity/, repository/)
+├── showtime/
+└── reservation/
+```
+
+Cada funcionalidade ganha `service/` (interface + `Impl`), `controller/` e `dto/` conforme as
+etapas avançam. Veja as decisões D08 e D09.
+
 ## Modelo de dados
 
 ```

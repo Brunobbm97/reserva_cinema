@@ -1,7 +1,7 @@
-package com.reservacinema.showtime;
+package com.reservacinema.showtime.entity;
 
-import com.reservacinema.movie.Movie;
-import com.reservacinema.room.Room;
+import com.reservacinema.movie.entity.Movie;
+import com.reservacinema.room.entity.Room;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;

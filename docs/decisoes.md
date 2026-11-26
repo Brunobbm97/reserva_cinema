@@ -69,10 +69,21 @@ Formato de cada decisão: **Contexto → Alternativas → Decisão → Por quê 
 - **Por quê:** evita bugs clássicos de horário de verão e fuso. A conversão para o horário local fica para quem exibe (o cliente).
 - **Consequências:** ao listar "sessões de um dia", precisamos converter o dia local para um intervalo em UTC.
 
-## D08. Organização por funcionalidade e código em inglês
+## D08. Organização por funcionalidade, com subpastas por camada, e código em inglês
 
 - **Contexto:** precisamos decidir como dividir as pastas e em que idioma nomear o código.
-- **Alternativas:** pacotes por camada (`controller/`, `service/`, `repository/`) ou por funcionalidade (`movie/`, `reservation/`...); nomes em português ou inglês.
-- **Decisão:** pacotes por funcionalidade (`user`, `movie`, `room`, `showtime`, `reservation`), código em inglês, comentários e documentação em português.
-- **Por quê:** por funcionalidade, tudo de "reservas" fica junto, e é mais fácil navegar conforme o projeto cresce. Inglês é o padrão do mercado e combina com os nomes do próprio Java e Spring (`findBy...`, `save`).
-- **Consequências:** cada pacote terá sua entidade, repositório, serviço e controller lado a lado.
+- **Alternativas:**
+  1. Pacotes só por camada (`controller/`, `service/`, `repository/` na raiz), misturando todas as funcionalidades.
+  2. Pacotes só por funcionalidade (`movie/`, com tudo solto dentro).
+  3. Por funcionalidade e, dentro de cada uma, subpastas por camada.
+- **Decisão:** opção 3. Cada funcionalidade (`user`, `movie`, `room`, `showtime`, `reservation`) tem `entity/`, `repository/`, `service/` e, mais adiante, `controller/` e `dto/`. Código em inglês, comentários e documentação em português.
+- **Por quê:** tudo de "filmes" fica junto (fácil de achar), e dentro dela as camadas ficam separadas (fácil de saber onde cada coisa mora). Na primeira versão as classes ficavam soltas dentro da funcionalidade; mudamos ao perceber que, com services, controllers e DTOs, a pasta ficaria cheia demais. Inglês é o padrão do mercado e combina com o próprio Java e Spring (`findBy...`, `save`).
+- **Consequências:** nomes de pacote um pouco mais longos (`com.reservacinema.movie.repository`).
+
+## D09. Services com interface + implementação (`MovieService` / `MovieServiceImpl`)
+
+- **Contexto:** a lógica de negócio (cadastrar filme, reservar assento) vai morar nos services. Precisamos decidir se cada service é uma classe só ou uma interface com uma implementação.
+- **Alternativas:** classe concreta única (`MovieService` com `@Service`); interface `MovieService` + classe `MovieServiceImpl`.
+- **Decisão:** interface + implementação.
+- **Por quê:** a interface descreve **o que** o service oferece (o "contrato"), e a `Impl` descreve **como** faz. O controller depende só do contrato, o que deixa claro o que é público e facilita trocar a implementação (ex.: um pagamento simulado por um real, na Etapa 5).
+- **Consequências:** um arquivo a mais por service. Muitos projetos modernos usam só a classe concreta quando existe uma única implementação; aqui escolhemos a interface pela clareza e pelo aprendizado do conceito.
