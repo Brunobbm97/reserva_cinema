@@ -5,6 +5,7 @@ PostgreSQL e JPA/Hibernate. Baseado no desafio
 [Movie Reservation System](https://roadmap.sh/projects/movie-reservation-system) do roadmap.sh.
 
 As decisões de arquitetura estão registradas em [docs/decisoes.md](docs/decisoes.md).
+Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md).
 
 ## Etapas
 
