@@ -226,3 +226,30 @@ Formato de cada decisão: **Contexto → Alternativas → Decisão → Por quê 
 - **Decisão:** `cancel()` muda o status para `CANCELLED` e marca cada assento como `active = false`. Só é permitido cancelar enquanto a sessão não começou, e só o dono cancela.
 - **Por quê:** desativar (em vez de apagar) libera o assento para outra pessoa — o índice único só considera os ativos — e mantém o histórico para os relatórios do admin (Etapa 6). Validamos: após o cancelamento, o assento volta a aparecer livre no mapa e pode ser reservado de novo.
 - **Consequências:** a tabela `reservation_seats` guarda linhas inativas; é intencional, é o histórico.
+
+---
+
+# Etapa 5: pagamento simulado
+
+## D26. Pagamento simulado, mas com registro real no banco
+
+- **Contexto:** a reserva nasce `PENDING_PAYMENT` (Etapa 4) e precisa ser confirmada por um pagamento. Não vamos integrar um gateway real agora.
+- **Decisão:** um pagamento simulado. O `POST /api/reservations/{id}/payment` recebe dados de "cartão", decide aprovado/recusado por uma regra fixa e, se aprovado, confirma a reserva. Cada tentativa (aprovada ou recusada) vira uma linha na tabela `payments` (migração `V3`).
+- **Regra da simulação:** cartão cujo número termina em `0000` é recusado; qualquer outro é aprovado. É determinístico de propósito, para dar para testar os dois caminhos sem aleatoriedade.
+- **Por quê:** o foco é aprender o fluxo (reserva → pagamento → confirmação) e o modelo de dados, sem a complexidade de um gateway. Como isolamos a decisão num ponto só do service, trocar por um provedor real depois (Stripe, Mercado Pago...) mexe só ali.
+- **Consequências:** nenhum dado sensível de verdade deve ser enviado; é um protótipo. Guardar as tentativas recusadas ajuda nos relatórios e a entender o comportamento do usuário.
+
+## D27. Pagamento recusado devolve 402 e NÃO desfaz o registro
+
+- **Contexto:** quando o pagamento é recusado, queremos duas coisas ao mesmo tempo: avisar o cliente com um erro e **manter** o registro da tentativa recusada.
+- **O problema:** por padrão, lançar uma exceção dentro de um método `@Transactional` desfaz tudo (rollback), o que apagaria o registro do pagamento recusado que acabamos de salvar.
+- **Decisão:** salvar o pagamento recusado, depois lançar `PaymentDeclinedException` (HTTP `402 Payment Required`) com `@Transactional(noRollbackFor = ...)`, para o insert do pagamento permanecer. A reserva continua `PENDING_PAYMENT`, então o usuário pode tentar de novo.
+- **Por quê 402:** é o status HTTP criado exatamente para "pagamento necessário/recusado". É mais expressivo do que um 400 genérico.
+- **Consequências:** é o mesmo padrão `noRollbackFor` que usamos no refresh token (D12). Um bom exemplo de quando "a exceção não deve desfazer tudo".
+
+## D28. O pagamento também é protegido por dono (IDOR)
+
+- **Contexto:** pagar é uma ação sobre uma reserva específica.
+- **Decisão:** como nas reservas (D23), o usuário vem do token e a reserva é buscada por dono (`findByIdAndUserId`). A reserva de outra pessoa dá `404`. Só reservas `PENDING_PAYMENT` e de sessões futuras podem ser pagas.
+- **Por quê:** manter a mesma defesa de IDOR em toda ação sensível. Pagar a reserva de outro, ou pagar algo já confirmado, não deve ser possível.
+- **Consequências:** o histórico de pagamentos (`GET /api/reservations/{id}/payments`) também confere o dono antes de mostrar qualquer coisa.
