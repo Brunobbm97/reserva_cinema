@@ -5,13 +5,13 @@ PostgreSQL e JPA/Hibernate. Baseado no desafio
 [Movie Reservation System](https://roadmap.sh/projects/movie-reservation-system) do roadmap.sh.
 
 As decisões de arquitetura estão registradas em [docs/decisoes.md](docs/decisoes.md).
-Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md), [Etapa 2](docs/guia-etapa2.md).
+Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md), [Etapa 2](docs/guia-etapa2.md), [Etapa 3](docs/guia-etapa3.md).
 
 ## Etapas
 
 - [x] 1. Estrutura do projeto e modelo de dados
 - [x] 2. Autenticação (JWT com access + refresh token) e papéis admin/usuário
-- [ ] 3. Filmes (com upload de pôster), salas e sessões
+- [x] 3. Filmes (com upload de pôster), salas e sessões
 - [ ] 4. Reservas de assentos com proteção contra overbooking
 - [ ] 5. Pagamento simulado
 - [ ] 6. Relatórios para o admin
@@ -49,6 +49,16 @@ Para usar outro banco, defina as variáveis `DB_URL`, `DB_USER` e `DB_PASSWORD`.
 | GET | `/api/admin/users` | ADMIN | Lista usuários |
 | PATCH | `/api/admin/users/{id}/role` | ADMIN | Promove ou rebaixa um usuário |
 
+| POST/DELETE | `/api/admin/rooms`, `/api/admin/rooms/{id}` | ADMIN | Cria/remove sala com mapa de assentos |
+| GET | `/api/rooms`, `/api/rooms/{id}` | logado | Lista salas / vê o mapa |
+| POST/PUT/DELETE | `/api/admin/movies`... | ADMIN | CRUD de filmes |
+| POST | `/api/admin/movies/{id}/poster` | ADMIN | Upload do pôster |
+| GET | `/api/movies`, `/api/movies/{id}` | público | Catálogo de filmes |
+| POST/DELETE | `/api/admin/showtimes`... | ADMIN | Cria/remove sessão |
+| GET | `/api/showtimes?date=...`, `/api/showtimes/{id}` | público | Sessões (por dia) |
+| GET | `/api/showtimes/{id}/seats` | público | Mapa de assentos livres/ocupados |
+| GET | `/api/movies/{id}/showtimes` | público | Sessões de um filme |
+
 Admin inicial em desenvolvimento: `admin@cinema.com` / `admin123` (altere com `ADMIN_EMAIL`
 e `ADMIN_PASSWORD`). Em produção, defina também `JWT_SECRET`.
 
@@ -73,7 +83,7 @@ src/main/java/com/reservacinema/
 │   ├── entity/        Movie, Genre
 │   └── repository/    MovieRepository, GenreRepository
 ├── room/              (mesma estrutura: entity/, repository/)
-├── showtime/
+├── showtime/           entity/, repository/, service/, controller/, dto/
 ├── reservation/
 ├── config/          SecurityConfig, AdminSeeder
 └── common/exception/ ApiException e filhas, GlobalExceptionHandler

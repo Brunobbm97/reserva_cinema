@@ -150,3 +150,46 @@ Formato de cada decisão: **Contexto → Alternativas → Decisão → Por quê 
 - **Decisão:** `ApiException` com subclasses (`NotFoundException` → 404, `ConflictException` → 409, `UnauthorizedException` → 401, `BusinessException` → 400) e um `@RestControllerAdvice` que transforma todas no mesmo JSON (`ApiError`). Erros inesperados viram 500 sem detalhes internos.
 - **Por quê:** o service só diz *o que* deu errado (`throw new ConflictException("E-mail já cadastrado")`); o formato da resposta fica num lugar só.
 - **Consequências:** erros de segurança (401/403) acontecem nos filtros, antes dos controllers, então precisaram de um escritor próprio (`SecurityErrorWriter`) no mesmo formato.
+
+---
+
+# Etapa 3: filmes, salas e sessões
+
+## D17. Sala criada junto com o seu mapa de assentos
+
+- **Contexto:** cada sala tem o próprio mapa (fileiras e números). Era preciso decidir como o admin cadastra isso.
+- **Alternativas:** cadastrar a sala e depois cada assento em requisições separadas; informar só uma capacidade numérica; enviar a sala com a descrição das fileiras de uma vez.
+- **Decisão:** o `POST /api/admin/rooms` recebe o nome e uma lista de fileiras (`{label, seats}`). O service gera os assentos (A1..A10, B1..B10...) numa transação só.
+- **Por quê:** é uma operação atômica — ou a sala nasce completa, ou não nasce. Evita salas pela metade. Uma checagem em memória (`Set`) impede mandar o mesmo lugar duas vezes antes de chegar ao banco.
+- **Consequências:** o mapa é definido na criação. Editar o mapa de uma sala já usada fica para depois, porque mexeria em sessões e reservas existentes.
+
+## D18. Upload de pôster no disco local, com nome gerado e validação de tipo
+
+- **Contexto:** o filme tem um pôster (imagem). Precisamos receber e servir esse arquivo.
+- **Alternativas:** guardar a imagem no banco (coluna binária); usar um serviço na nuvem (S3); gravar no disco local.
+- **Decisão:** disco local (pasta `uploads/posters`), guardando no banco só o caminho. A imagem é servida pela URL pública `/files/**`. O arquivo recebe um nome novo (UUID) e só aceitamos JPEG/PNG/WebP.
+- **Por quê:** é o mais simples para aprender e combina com "armazenamento local está bom por enquanto". Guardar imagem no banco incha o banco e piora o desempenho. Trocar por S3 depois é fácil, porque isolamos tudo atrás da interface `PosterStorageService`.
+- **Segurança (importante):** nunca usamos o nome enviado pelo usuário no disco. Um nome como `../../app.properties` poderia escrever fora da pasta (ataque de *path traversal*). Por isso geramos o nome e ainda conferimos que o caminho final continua dentro da pasta raiz. Validar o tipo evita subir um arquivo executável disfarçado.
+- **Consequências:** os arquivos não entram no Git (pasta `uploads/` ignorada) e não são copiados junto no deploy; em produção, a pasta precisa persistir.
+
+## D19. Não expor entidades: tudo entra e sai por DTO
+
+- **Contexto:** continuação da decisão D14, agora para filmes, salas e sessões.
+- **Decisão:** cada recurso tem seus DTOs de entrada e saída (`MovieRequest`/`MovieResponse`, `CreateRoomRequest`/`RoomResponse`, `ShowtimeRequest`/`ShowtimeResponse`). Gêneros são enviados como nomes, não como ids.
+- **Por quê:** além de proteger o que entra e sai, os DTOs evitam um problema clássico do JPA: serializar uma entidade com relações `LAZY` fora da transação quebra (a famosa `LazyInitializationException`). Convertendo para DTO dentro do service, montamos exatamente os dados que a resposta precisa.
+- **Consequências:** o service faz as conversões (`MovieResponse.from(...)`), e o cliente não lida com ids de gênero.
+
+## D20. Sem sobreposição de sessões na mesma sala
+
+- **Contexto:** não faz sentido duas sessões ao mesmo tempo na mesma sala.
+- **Alternativas:** não checar; checar no código ao criar; uma constraint de exclusão no banco (`EXCLUDE USING gist`).
+- **Decisão:** checar no service com uma consulta que conta sessões sobrepostas na mesma sala, dentro da transação de criação.
+- **Por quê:** a constraint de exclusão do PostgreSQL é poderosa, mas avançada e específica demais para este momento de aprendizado. A checagem por consulta é fácil de ler e cobre o uso real (um admin cadastrando sessões). O horário de término é calculado a partir da duração do filme, então a sobreposição considera o filme inteiro.
+- **Consequências:** em teoria, dois admins criando sessões no mesmo instante poderiam furar a checagem (é a mesma condição de corrida da reserva). Para o volume de um admin cadastrando a grade, é aceitável; a proteção forte de concorrência fica para as reservas (etapa 4), onde ela importa de verdade.
+
+## D21. Datas e fuso na listagem por dia
+
+- **Contexto:** "sessões do dia 1º de dezembro" depende do fuso de quem pergunta.
+- **Decisão:** a API guarda tudo em UTC (`Instant`), mas interpreta o parâmetro `?date=` no fuso de Brasília: o dia local vira o intervalo `[00:00 local, 00:00 do dia seguinte)` convertido para UTC.
+- **Por quê:** o usuário pensa no horário local. Guardar em UTC e converter só na consulta evita bugs de fuso e de horário de verão.
+- **Consequências:** o fuso está fixo no código por enquanto; se o cinema tivesse salas em fusos diferentes, isso viraria configuração.
