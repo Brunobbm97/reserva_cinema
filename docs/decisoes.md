@@ -193,3 +193,36 @@ Formato de cada decisão: **Contexto → Alternativas → Decisão → Por quê 
 - **Decisão:** a API guarda tudo em UTC (`Instant`), mas interpreta o parâmetro `?date=` no fuso de Brasília: o dia local vira o intervalo `[00:00 local, 00:00 do dia seguinte)` convertido para UTC.
 - **Por quê:** o usuário pensa no horário local. Guardar em UTC e converter só na consulta evita bugs de fuso e de horário de verão.
 - **Consequências:** o fuso está fixo no código por enquanto; se o cinema tivesse salas em fusos diferentes, isso viraria configuração.
+
+---
+
+# Etapa 4: reservas com proteção contra overbooking
+
+## D22. A reserva é feita numa transação e o conflito do banco vira 409
+
+- **Contexto:** o coração do sistema. Duas pessoas podem escolher o mesmo assento quase ao mesmo tempo. Precisamos garantir que só uma consiga, sem travar o sistema.
+- **Como funciona:** ao reservar, abrimos uma transação, criamos a reserva com os assentos e mandamos gravar (`saveAndFlush`). O índice único parcial `uq_active_seat_per_showtime` (criado lá na Etapa 1, decisão D05) faz o banco recusar o segundo `INSERT` do mesmo assento. Capturamos essa falha (`DataIntegrityViolationException`) e respondemos `409 Conflict` com uma mensagem clara.
+- **Por que `saveAndFlush` e não só `save`:** por padrão, o Hibernate só envia os comandos ao banco no fim da transação (no commit), que acontece **depois** do nosso método. Se não forçarmos o envio, a violação explodiria no commit, fora do nosso `try/catch`, e viraria um erro `500`. O `flush` antecipa o `INSERT` para dentro do `try`, onde conseguimos tratar. Isto apareceu de verdade no teste: antes do ajuste, o conflito dava `500`; depois, dá `409`.
+- **Por que confiar no banco e não checar antes:** poderíamos consultar "o assento está livre?" e depois inserir. Mas entre a consulta e o `INSERT`, outra requisição pode inserir primeiro (condição de corrida). O banco é o único ponto que vê todas as requisições em série, então é ele quem decide. Validamos isto com um teste real: 8 requisições simultâneas no mesmo assento resultaram em **exatamente um** `201` e sete `409`, com **uma** linha ativa no banco.
+- **Consequências:** a solução é simples e robusta, sem locks explícitos. O custo é tratar a exceção, mas o código fica claro.
+
+## D23. O usuário vem do token, nunca do corpo (proteção contra IDOR)
+
+- **Contexto:** o projeto antigo (`reservation_movie`) recebia o `userId` no corpo da requisição. Isso deixaria qualquer um reservar, ver ou cancelar em nome de outra pessoa só trocando o número.
+- **Decisão:** em todas as rotas de reserva, o usuário é lido do access token (`@AuthenticationPrincipal`). O corpo só traz a sessão e os assentos. Ao buscar uma reserva, filtramos por dono (`findByIdAndUserId`).
+- **Por quê:** é a defesa contra **IDOR** (Insecure Direct Object Reference), uma das falhas mais comuns em APIs: acessar o recurso de outro usuário trocando o id na URL. Quando a reserva não é do usuário, respondemos `404` (e não `403`), para nem confirmar que ela existe.
+- **Consequências:** o cliente não precisa (nem pode) informar quem é; quem manda é o token.
+
+## D24. Reserva nasce PENDING_PAYMENT e já segura o assento
+
+- **Contexto:** a confirmação depende do pagamento, que é a próxima etapa.
+- **Decisão:** a reserva é criada com status `PENDING_PAYMENT`. Mesmo pendente, o assento já conta como ocupado (o índice único não olha o status, só o `active`). O pagamento (Etapa 5) muda para `CONFIRMED`.
+- **Por quê:** o assento precisa ficar reservado no instante do clique, senão duas pessoas pagariam pelo mesmo lugar. Segurar primeiro e confirmar no pagamento é como a maioria dos sistemas de bilhete funciona.
+- **Consequência / dívida técnica:** uma reserva pendente que nunca é paga segura o assento para sempre. A solução usual é uma expiração (ex.: liberar após 10 minutos sem pagamento). Deixamos isso anotado para tratar junto com o pagamento ou na rodada de melhorias.
+
+## D25. Cancelar desativa os assentos, não apaga a reserva
+
+- **Contexto:** o usuário pode cancelar uma reserva futura.
+- **Decisão:** `cancel()` muda o status para `CANCELLED` e marca cada assento como `active = false`. Só é permitido cancelar enquanto a sessão não começou, e só o dono cancela.
+- **Por quê:** desativar (em vez de apagar) libera o assento para outra pessoa — o índice único só considera os ativos — e mantém o histórico para os relatórios do admin (Etapa 6). Validamos: após o cancelamento, o assento volta a aparecer livre no mapa e pode ser reservado de novo.
+- **Consequências:** a tabela `reservation_seats` guarda linhas inativas; é intencional, é o histórico.
