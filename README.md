@@ -5,7 +5,7 @@ PostgreSQL e JPA/Hibernate. Baseado no desafio
 [Movie Reservation System](https://roadmap.sh/projects/movie-reservation-system) do roadmap.sh.
 
 As decisões de arquitetura estão registradas em [docs/decisoes.md](docs/decisoes.md).
-Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md), [Etapa 2](docs/guia-etapa2.md), [Etapa 3](docs/guia-etapa3.md), [Etapa 4](docs/guia-etapa4.md).
+Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md), [Etapa 2](docs/guia-etapa2.md), [Etapa 3](docs/guia-etapa3.md), [Etapa 4](docs/guia-etapa4.md), [Etapa 5](docs/guia-etapa5.md).
 
 ## Etapas
 
@@ -13,7 +13,7 @@ Para rodar e entender cada etapa, veja os guias: [Etapa 1](docs/guia-etapa1.md),
 - [x] 2. Autenticação (JWT com access + refresh token) e papéis admin/usuário
 - [x] 3. Filmes (com upload de pôster), salas e sessões
 - [x] 4. Reservas de assentos com proteção contra overbooking
-- [ ] 5. Pagamento simulado
+- [x] 5. Pagamento simulado
 - [ ] 6. Relatórios para o admin
 
 ## Como rodar localmente
@@ -62,6 +62,9 @@ Para usar outro banco, defina as variáveis `DB_URL`, `DB_USER` e `DB_PASSWORD`.
 | POST | `/api/reservations` | logado | Reserva assentos (409 se já ocupado) |
 | GET | `/api/reservations`, `/api/reservations/{id}` | logado (dono) | Minhas reservas |
 | POST | `/api/reservations/{id}/cancel` | logado (dono) | Cancela reserva futura |
+
+| POST | `/api/reservations/{id}/payment` | logado (dono) | Pagamento simulado (confirma a reserva) |
+| GET | `/api/reservations/{id}/payments` | logado (dono) | Histórico de pagamentos |
 
 Admin inicial em desenvolvimento: `admin@cinema.com` / `admin123` (altere com `ADMIN_EMAIL`
 e `ADMIN_PASSWORD`). Em produção, defina também `JWT_SECRET`.
